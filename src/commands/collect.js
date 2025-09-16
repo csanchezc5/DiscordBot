@@ -3,25 +3,26 @@ const pool = require('../database.js');
 
 // Map para almacenar los cooldowns de usuarios
 const cooldowns = new Map();
-const COOLDOWN_TIME = 60 * 1000; // 1 hora en milisegundos
+const COOLDOWN_TIME = 5 * 60 * 1000; // 5 minutos para testing, cambiar a 60 * 60 * 1000 para 1 hora
 
-// Cache de jugadores (SIEMPRE usar fallback como base)
+// Cache de jugadores con gestión más robusta
 let playersCache = null;
 let lastCacheUpdate = 0;
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
+let isUpdatingCache = false;
+const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 horas (más frecuente para datos actuales)
 
 const getRarity = () => {
     const rand = Math.random() * 100;
-    if (rand < 5) return 'Epic';
-    if (rand < 30) return 'Rare';
-    return 'Common';
+    if (rand < 8) return 'Epic';   // 8% Epic (un poco más generoso)
+    if (rand < 35) return 'Rare';  // 27% Rare  
+    return 'Common'; // 65% Common
 };
 
 const getRarityColor = (rarity) => {
     switch (rarity) {
-        case 'Epic': return 0x9B59B6;
-        case 'Rare': return 0x3498DB;
-        case 'Common': return 0x95A5A6;
+        case 'Epic': return 0x9B59B6;   // Púrpura
+        case 'Rare': return 0x3498DB;   // Azul
+        case 'Common': return 0x95A5A6; // Gris
         default: return 0x95A5A6;
     }
 };
@@ -29,7 +30,7 @@ const getRarityColor = (rarity) => {
 const getRarityEmoji = (rarity) => {
     switch (rarity) {
         case 'Epic': return '🟣';
-        case 'Rare': return '🔵';
+        case 'Rare': return '🔵'; 
         case 'Common': return '⚪';
         default: return '⚪';
     }
@@ -45,94 +46,114 @@ const formatTime = (ms) => {
     return `${seconds}s`;
 };
 
-const getFallbackPlayers = () => {
-    return [
-        // Epic players (5%)
-        { name: 'Lionel Messi', team: 'Inter Miami', position: 'Attacker', nationality: 'Argentina', age: 36, rarity: 'Epic', image: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Kylian Mbappé', team: 'Real Madrid', position: 'Attacker', nationality: 'France', age: 25, rarity: 'Epic', image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Erling Haaland', team: 'Manchester City', position: 'Attacker', nationality: 'Norway', age: 24, rarity: 'Epic', image: 'https://images.unsplash.com/photo-1579952363873-27d3bfad9c0d?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Pedri', team: 'Barcelona', position: 'Midfielder', nationality: 'Spain', age: 21, rarity: 'Epic', image: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Jude Bellingham', team: 'Real Madrid', position: 'Midfielder', nationality: 'England', age: 20, rarity: 'Epic', image: 'https://images.unsplash.com/photo-1541801258-ee6c1eeeb6e5?w=400&h=500&fit=crop&crop=face' },
-        
-        // Rare players (25%)
-        { name: 'Cristiano Ronaldo', team: 'Al Nassr', position: 'Attacker', nationality: 'Portugal', age: 38, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Kevin De Bruyne', team: 'Manchester City', position: 'Midfielder', nationality: 'Belgium', age: 32, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Mohamed Salah', team: 'Liverpool', position: 'Attacker', nationality: 'Egypt', age: 31, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1506628038767-c09583ff7b08?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Luka Modrić', team: 'Real Madrid', position: 'Midfielder', nationality: 'Croatia', age: 38, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Neymar Jr', team: 'Al Hilal', position: 'Attacker', nationality: 'Brazil', age: 32, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1553778263-73a83bab9b0c?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Bruno Fernandes', team: 'Manchester United', position: 'Midfielder', nationality: 'Portugal', age: 29, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1582142306909-195724d33be0?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Harry Kane', team: 'Bayern Munich', position: 'Attacker', nationality: 'England', age: 30, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Vinicius Jr', team: 'Real Madrid', position: 'Attacker', nationality: 'Brazil', age: 24, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Phil Foden', team: 'Manchester City', position: 'Midfielder', nationality: 'England', age: 24, rarity: 'Rare', image: 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=400&h=500&fit=crop&crop=face' },
-        
-        // Common players (70%)
-        { name: 'Virgil van Dijk', team: 'Liverpool', position: 'Defender', nationality: 'Netherlands', age: 32, rarity: 'Common', image: 'https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Sergio Ramos', team: 'PSG', position: 'Defender', nationality: 'Spain', age: 37, rarity: 'Common', image: 'https://images.unsplash.com/photo-1595666944516-f0991229954b?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Manuel Neuer', team: 'Bayern Munich', position: 'Goalkeeper', nationality: 'Germany', age: 37, rarity: 'Common', image: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Alisson', team: 'Liverpool', position: 'Goalkeeper', nationality: 'Brazil', age: 30, rarity: 'Common', image: 'https://images.unsplash.com/photo-1577223625816-7546f13df25d?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Thiago Silva', team: 'Chelsea', position: 'Defender', nationality: 'Brazil', age: 39, rarity: 'Common', image: 'https://images.unsplash.com/photo-1594736797933-d0751ba15004?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Karim Benzema', team: 'Al Ittihad', position: 'Attacker', nationality: 'France', age: 36, rarity: 'Common', image: 'https://images.unsplash.com/photo-1566577134770-3d85bb3a9cc4?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Casemiro', team: 'Manchester United', position: 'Midfielder', nationality: 'Brazil', age: 31, rarity: 'Common', image: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=400&h=500&fit=crop&crop=face' },
-        { name: 'N\'Golo Kanté', team: 'Al Ittihad', position: 'Midfielder', nationality: 'France', age: 33, rarity: 'Common', image: 'https://images.unsplash.com/photo-1594736797933-d0501ba15004?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Thibaut Courtois', team: 'Real Madrid', position: 'Goalkeeper', nationality: 'Belgium', age: 31, rarity: 'Common', image: 'https://images.unsplash.com/photo-1568393691622-c7ba131d63b4?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Gerard Piqué', team: 'Retired', position: 'Defender', nationality: 'Spain', age: 37, rarity: 'Common', image: 'https://images.unsplash.com/photo-1570498601017-bce617ab4ec9?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Marcelo', team: 'Fluminense', position: 'Defender', nationality: 'Brazil', age: 35, rarity: 'Common', image: 'https://images.unsplash.com/photo-1625961179667-32b10885ef6c?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Jan Oblak', team: 'Atletico Madrid', position: 'Goalkeeper', nationality: 'Slovenia', age: 31, rarity: 'Common', image: 'https://images.unsplash.com/photo-1566577739114-d9b1d93d0ad4?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Dani Alves', team: 'Retired', position: 'Defender', nationality: 'Brazil', age: 40, rarity: 'Common', image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Jordi Alba', team: 'Inter Miami', position: 'Defender', nationality: 'Spain', age: 34, rarity: 'Common', image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Sergio Busquets', team: 'Inter Miami', position: 'Midfielder', nationality: 'Spain', age: 35, rarity: 'Common', image: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Luka Jović', team: 'AC Milan', position: 'Attacker', nationality: 'Serbia', age: 26, rarity: 'Common', image: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Raphaël Varane', team: 'Manchester United', position: 'Defender', nationality: 'France', age: 30, rarity: 'Common', image: 'https://images.unsplash.com/photo-1517466787929-bc90951d0974?w=400&h=500&fit=crop&crop=face' },
-        { name: 'Antoine Griezmann', team: 'Atletico Madrid', position: 'Attacker', nationality: 'France', age: 33, rarity: 'Common', image: 'https://images.unsplash.com/photo-1595666944516-f0991559954b?w=400&h=500&fit=crop&crop=face' }
-    ];
-};
-
-// Función simple para obtener jugadores - SIEMPRE funciona
-const getPlayers = () => {
+// Función robusta para obtener jugadores
+const getPlayers = async () => {
     const now = Date.now();
     
-    // Si no hay cache o está vencido, "actualizar"
-    if (playersCache === null || (now - lastCacheUpdate) > CACHE_DURATION) {
-        console.log('🔄 Refreshing player data...');
-        
-        // Por ahora, SIEMPRE usar fallback hasta que tu API esté configurada correctamente
-        playersCache = getFallbackPlayers();
-        lastCacheUpdate = now;
-        
-        console.log(`✅ Loaded ${playersCache.length} players (local database)`);
-        
-        // TODO: Cuando tengas la API funcionando, descomenta esta parte:
-        /*
-        try {
-            const { getAllPopularPlayers } = require('../services/footballAPI.js');
-            const apiPlayers = await getAllPopularPlayers();
-            if (apiPlayers && apiPlayers.length > 0) {
-                playersCache = apiPlayers.map(player => ({
-                    name: player.name,
-                    team: player.team,
-                    position: player.position,
-                    nationality: player.nationality || 'Unknown',
-                    age: player.age || 25,
-                    image: player.photo || `https://via.placeholder.com/300x400/95A5A6/FFFFFF?text=${encodeURIComponent(player.name)}`,
-                    rarity: assignRarityToPlayer(player)
-                }));
-                console.log(`✅ Loaded ${playersCache.length} players from API`);
-            } else {
-                throw new Error('No API data available');
-            }
-        } catch (error) {
-            console.log(`⚠️  API failed, using offline data: ${error.message}`);
-            playersCache = getFallbackPlayers();
-        }
-        */
+    // Si hay cache válido, usarlo
+    if (playersCache && playersCache.length > 0 && (now - lastCacheUpdate) < CACHE_DURATION) {
+        console.log(`✅ Using cached data (${playersCache.length} players)`);
+        return playersCache;
     }
     
-    return playersCache;
+    // Evitar múltiples actualizaciones simultáneas
+    if (isUpdatingCache) {
+        console.log('⏳ Cache update in progress, waiting...');
+        
+        // Esperar hasta 30 segundos por la actualización
+        const maxWait = 30000;
+        const startWait = Date.now();
+        
+        while (isUpdatingCache && (Date.now() - startWait) < maxWait) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        // Si tenemos cache después de esperar, usarlo
+        if (playersCache && playersCache.length > 0) {
+            return playersCache;
+        }
+    }
+    
+    isUpdatingCache = true;
+    
+    try {
+        console.log('🔄 Refreshing player data from API...');
+        
+        const { getAllPopularPlayers } = require('../services/footballAPI.js');
+        const apiPlayers = await getAllPopularPlayers();
+        
+        if (!apiPlayers || !Array.isArray(apiPlayers) || apiPlayers.length === 0) {
+            throw new Error('No valid player data received from API');
+        }
+        
+        // Procesar y validar datos
+        playersCache = apiPlayers
+            .map(player => ({
+                name: player.name || 'Unknown Player',
+                team: player.team || 'Unknown Team',
+                position: player.position || 'Player',
+                nationality: player.nationality || 'Unknown',
+                age: Number(player.age) || 25,
+                image: player.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(player.name || 'Player')}&size=400&background=3498db&color=ffffff`,
+                rarity: player.rarity || 'Common',
+                goals: Number(player.goals) || 0,
+                assists: Number(player.assists) || 0,
+                league: player.league || 'Unknown League'
+            }))
+            .filter(player => 
+                player.name !== 'Unknown Player' && 
+                player.team !== 'Unknown Team'
+            ); // Filtrar datos inválidos
+        
+        if (playersCache.length === 0) {
+            throw new Error('No valid players after processing API data');
+        }
+        
+        lastCacheUpdate = now;
+        
+        // Mostrar estadísticas del cache
+        const rarityStats = {
+            Epic: playersCache.filter(p => p.rarity === 'Epic').length,
+            Rare: playersCache.filter(p => p.rarity === 'Rare').length,
+            Common: playersCache.filter(p => p.rarity === 'Common').length
+        };
+        
+        console.log(`✅ Cache updated: ${playersCache.length} players`);
+        console.log(`📊 Rarity distribution: Epic(${rarityStats.Epic}) Rare(${rarityStats.Rare}) Common(${rarityStats.Common})`);
+        
+        return playersCache;
+        
+    } catch (error) {
+        console.error('❌ Failed to update player cache:', error.message);
+        
+        // Si tenemos cache viejo, usarlo como respaldo
+        if (playersCache && playersCache.length > 0) {
+            console.log('⚠️ Using stale cache data as fallback');
+            return playersCache;
+        }
+        
+        // Si no hay cache en absoluto, re-lanzar error
+        throw new Error(`Unable to load player data: ${error.message}`);
+        
+    } finally {
+        isUpdatingCache = false;
+    }
+};
+
+// Función mejorada para manejo de errores de base de datos
+const handleDatabaseOperation = async (operation, description) => {
+    try {
+        return await operation();
+    } catch (error) {
+        console.error(`❌ Database error (${description}):`, error.message);
+        // No lanzar error, solo loguearlo - el comando puede continuar
+        return null;
+    }
 };
 
 module.exports = {
     async execute(interaction) {
-        // DEFER INMEDIATAMENTE - esto es crítico
+        // DEFER inmediatamente para evitar timeouts
         await interaction.deferReply();
         
         try {
@@ -150,7 +171,8 @@ module.exports = {
                         .setColor(0xE74C3C)
                         .setTitle('⏰ Cooldown Active')
                         .setDescription(`You need to wait **${formatTime(timeLeft)}** before collecting another card!`)
-                        .setFooter({ text: 'Try again later!' });
+                        .setFooter({ text: 'Cards are more valuable when rare!' })
+                        .setTimestamp();
                     
                     return await interaction.editReply({ embeds: [cooldownEmbed] });
                 }
@@ -159,34 +181,62 @@ module.exports = {
             // Establecer nuevo cooldown
             cooldowns.set(userId, now);
 
-            // Obtener jugadores (SIEMPRE funciona)
-            const allPlayers = getPlayers();
-            console.log(`🎮 Available players: ${allPlayers.length}`);
+            // Obtener jugadores de la API
+            let allPlayers;
+            try {
+                allPlayers = await getPlayers();
+                console.log(`🎮 Loaded ${allPlayers.length} players for selection`);
+            } catch (error) {
+                console.error('💥 Critical: Could not load any player data:', error.message);
+                
+                const errorEmbed = new EmbedBuilder()
+                    .setColor(0xE74C3C)
+                    .setTitle('🚫 Service Temporarily Unavailable')
+                    .setDescription('The player database is currently unavailable. This could be due to:\n\n• API maintenance\n• Network connectivity issues\n• Configuration problems')
+                    .addFields(
+                        { name: '🔧 Admin Info', value: 'Check API configuration and logs' },
+                        { name: '⏰ Try Again', value: 'Service should be restored shortly' }
+                    )
+                    .setFooter({ text: 'We apologize for the inconvenience' })
+                    .setTimestamp();
+                
+                return await interaction.editReply({ embeds: [errorEmbed] });
+            }
             
-            const rarity = getRarity();
-            console.log(`🎲 Selected rarity: ${rarity}`);
+            // Seleccionar rareza y jugador
+            const selectedRarity = getRarity();
+            console.log(`🎲 Selected rarity: ${selectedRarity}`);
             
             // Filtrar jugadores por rareza
-            let availablePlayers = allPlayers.filter(p => p.rarity === rarity);
-            console.log(`🔍 Players for ${rarity}: ${availablePlayers.length}`);
+            let availablePlayers = allPlayers.filter(p => p.rarity === selectedRarity);
+            console.log(`🔍 Players available for ${selectedRarity}: ${availablePlayers.length}`);
             
-            // Si no hay jugadores de esa rareza (no debería pasar), usar Common como fallback
+            // Si no hay jugadores de esa rareza, intentar con otras
             if (availablePlayers.length === 0) {
-                console.log('⚠️  No players for rarity, using Common as fallback');
-                availablePlayers = allPlayers.filter(p => p.rarity === 'Common');
+                console.log('⚠️ No players for selected rarity, trying alternatives...');
+                
+                // Intentar Rare primero, luego Common
+                for (const fallbackRarity of ['Rare', 'Common', 'Epic']) {
+                    availablePlayers = allPlayers.filter(p => p.rarity === fallbackRarity);
+                    if (availablePlayers.length > 0) {
+                        console.log(`✅ Using ${fallbackRarity} players instead (${availablePlayers.length} available)`);
+                        break;
+                    }
+                }
             }
             
-            // Si TODAVÍA no hay jugadores, usar el primero disponible
+            // Verificación final
             if (availablePlayers.length === 0) {
-                console.log('⚠️  Using first available player');
-                availablePlayers = [allPlayers[0]];
+                throw new Error('No players available for any rarity level');
             }
             
+            // Seleccionar jugador aleatorio
             const randomPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
-            console.log(`🏆 Selected player: ${randomPlayer.name} (${randomPlayer.rarity})`);
+            console.log(`🏆 Selected: ${randomPlayer.name} (${randomPlayer.rarity}) from ${randomPlayer.team}`);
 
-            // Base de datos con mejor manejo de errores
-            try {
+            // Intentar guardar en base de datos (no crítico si falla)
+            let dbSaved = false;
+            const dbResult = await handleDatabaseOperation(async () => {
                 let playerResult = await pool.query('SELECT id FROM players WHERE name = $1', [randomPlayer.name]);
 
                 let playerId;
@@ -205,46 +255,63 @@ module.exports = {
                     [userId, playerId]
                 );
                 
-                console.log('✅ Database updated successfully');
-            } catch (dbError) {
-                console.error('❌ Database error:', dbError);
-                // Continuar aunque falle la DB - el usuario al menos ve la carta
+                return true;
+            }, 'save player card');
+            
+            if (dbResult) {
+                dbSaved = true;
+                console.log('✅ Card saved to database');
+            } else {
+                console.log('⚠️ Card not saved to database, but continuing...');
             }
 
-            // Crear embed
+            // Crear embed de respuesta
             const embed = new EmbedBuilder()
                 .setColor(getRarityColor(randomPlayer.rarity))
-                .setTitle(`${getRarityEmoji(randomPlayer.rarity)} ${randomPlayer.rarity.toUpperCase()} CARD OBTAINED!`)
-                .setDescription(`**${randomPlayer.name}**`)
+                .setTitle(`${getRarityEmoji(randomPlayer.rarity)} ${randomPlayer.rarity.toUpperCase()} CARD COLLECTED!`)
+                .setDescription(`**${randomPlayer.name}**\n*${randomPlayer.league}*`)
                 .addFields(
                     { name: '🏆 Team', value: randomPlayer.team, inline: true },
                     { name: '⚽ Position', value: randomPlayer.position, inline: true },
-                    { name: '🌍 Nationality', value: randomPlayer.nationality, inline: true },
-                    { name: '🎂 Age', value: randomPlayer.age.toString(), inline: true }
+                    { name: '🌍 Nation', value: randomPlayer.nationality, inline: true },
+                    { name: '🎂 Age', value: randomPlayer.age.toString(), inline: true },
+                    { name: '⚽ Goals', value: randomPlayer.goals.toString(), inline: true },
+                    { name: '🎯 Assists', value: randomPlayer.assists.toString(), inline: true }
+                    
                 )
                 .setThumbnail(randomPlayer.image)
                 .setFooter({ 
-                    text: `Collected by ${interaction.user.displayName} • Next drop in 1 hour`, 
+                    text: `Collected by ${interaction.user.displayName} • Next drop available in ${COOLDOWN_TIME / 60000} minutes${dbSaved ? '' : ' • ⚠️ Not saved to collection'}`,
                     iconURL: interaction.user.displayAvatarURL() 
                 })
                 .setTimestamp();
 
             await interaction.editReply({ embeds: [embed] });
-            console.log('✅ Card successfully sent to user');
+            console.log('✅ Card successfully delivered to user');
 
         } catch (error) {
-            console.error('❌ Critical error in drop command:', error);
+            console.error('💥 Critical error in drop command:', error);
             
+            // Asegurar respuesta al usuario
             try {
-                const errorEmbed = new EmbedBuilder()
+                const criticalErrorEmbed = new EmbedBuilder()
                     .setColor(0xE74C3C)
-                    .setTitle('⚠️ Error')
-                    .setDescription('Something went wrong while collecting your card. Please try again!')
-                    .setFooter({ text: 'If this persists, contact an admin.' });
+                    .setTitle('💥 Critical Error')
+                    .setDescription('An unexpected error occurred while processing your card drop.')
+                    .addFields(
+                        { name: '🔍 Details', value: 'The development team has been notified of this issue.' },
+                        { name: '💡 What to do', value: 'Please try again in a few minutes. If the problem persists, contact an administrator.' }
+                    )
+                    .setFooter({ text: 'Error ID: ' + Date.now().toString(36) })
+                    .setTimestamp();
                 
-                await interaction.editReply({ embeds: [errorEmbed] });
+                if (interaction.deferred && !interaction.replied) {
+                    await interaction.editReply({ embeds: [criticalErrorEmbed] });
+                } else if (!interaction.replied) {
+                    await interaction.reply({ embeds: [criticalErrorEmbed] });
+                }
             } catch (replyError) {
-                console.error('❌ Failed to send error message:', replyError);
+                console.error('💥 Failed to send error response:', replyError);
             }
         }
     }

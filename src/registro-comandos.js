@@ -11,6 +11,20 @@ const commands = [
                 description: 'El primer numero',
                 type: ApplicationCommandOptionType.Number,
                 required: true,
+                choices:[
+                    {
+                        name:'uno',
+                        value: 1,
+                    },
+                    {
+                        name:'dos',
+                        value: 2,
+                    },
+                    {
+                        name:'tres',
+                        value: 3,
+                    },
+                ]
             },
             {
                 name: 'segundo_numero',
@@ -20,6 +34,10 @@ const commands = [
             },
         ]
     },
+    {
+        name:'embed',
+        description:'Envia un embed'
+    }
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);

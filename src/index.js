@@ -13,6 +13,8 @@ const client = new Client({
 
 client.on('ready', (c) => {
     console.log(`✨ ${c.user.username} is online`);
+
+     require('./registro-comandos.js')(client);
 });
 
 client.on('messageCreate', (msg) => {

@@ -1,48 +1,20 @@
 require('dotenv').config();
-const { REST, Routes, ApplicationCommandOptionType} = require('discord.js');
+const { REST, Routes } = require('discord.js');
 
 const commands = [
     {
-        name: 'add',
-        description: 'Agrega dos numeros.',
-        options: [
-            {
-                name: 'primer_numero',
-                description: 'El primer numero',
-                type: ApplicationCommandOptionType.Number,
-                required: true,
-                choices:[
-                    {
-                        name:'uno',
-                        value: 1,
-                    },
-                    {
-                        name:'dos',
-                        value: 2,
-                    },
-                    {
-                        name:'tres',
-                        value: 3,
-                    },
-                ]
-            },
-            {
-                name: 'segundo_numero',
-                description: 'El segundo numero',
-                type: ApplicationCommandOptionType.Number,
-                required: true,
-            },
-        ]
+        name: 'drop',
+        description: 'Recolecta una carta de jugador.',
     },
     {
-        name:'embed',
-        description:'Envia un embed'
+        name: 'collection',
+        description: 'Revisa tu colección de cartas en tu inventario'
     }
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-(async () => {
+module.exports = async (client) => {
     try {
         console.log('Registrando comandos...');
         
@@ -52,7 +24,23 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
         );
         
         console.log('Comandos registrados exitosamente');
+
+        // Manejar interacciones
+        client.on('interactionCreate', async interaction => {
+            if (!interaction.isChatInputCommand()) return;
+
+            const { commandName } = interaction;
+
+            if (commandName === 'drop') {
+                const collectCommand = require('./commands/collect.js');
+                await collectCommand.execute(interaction);
+            } else if (commandName === 'collection') {
+                const cardsCommand = require('./commands/cards.js');
+                await cardsCommand.execute(interaction);
+            }
+        });
+
     } catch (error) {
         console.log(`Hay un error: ${error}`);
     }
-})();
+};

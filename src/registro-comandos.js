@@ -9,7 +9,12 @@ const commands = [
     {
         name: 'collection',
         description: 'Revisa tu colección de cartas en tu inventario'
-    }
+    },
+    {
+        name: 'burn',
+        description: 'Elimina una carta de tu colección',
+        
+    },
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -31,12 +36,34 @@ module.exports = async (client) => {
 
             const { commandName } = interaction;
 
-            if (commandName === 'drop') {
-                const collectCommand = require('./commands/collect.js');
-                await collectCommand.execute(interaction);
-            } else if (commandName === 'collection') {
-                const cardsCommand = require('./commands/cards.js');
-                await cardsCommand.execute(interaction);
+            try {
+                if (commandName === 'drop') {
+                    const collectCommand = require('./commands/collect.js');
+                    await collectCommand.execute(interaction);
+                    
+                } else if (commandName === 'collection') {
+                    const cardsCommand = require('./commands/cards.js');
+                    await cardsCommand.execute(interaction);
+                                        
+                } else {
+                    console.log(`Comando desconocido: ${commandName}`);
+                }
+                
+            } catch (error) {
+                console.error(`Error ejecutando comando ${commandName}:`, error);
+                
+                // Manejo de errores para responder al usuario
+                const errorMessage = 'Hubo un error al ejecutar este comando. Por favor, inténtalo de nuevo.';
+                
+                try {
+                    if (interaction.deferred) {
+                        await interaction.editReply(errorMessage);
+                    } else if (!interaction.replied) {
+                        await interaction.reply({ content: errorMessage, ephemeral: true });
+                    }
+                } catch (replyError) {
+                    console.error('Error enviando respuesta de error:', replyError);
+                }
             }
         });
 

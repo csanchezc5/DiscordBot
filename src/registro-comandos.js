@@ -13,7 +13,14 @@ const commands = [
     {
         name: 'burn',
         description: 'Elimina una carta de tu colección',
-        
+        options: [
+            {
+                name: 'card_id',
+                type: 3, // STRING
+                description: 'ID de la carta a eliminar (opcional - si no se especifica, se quema la última carta)',
+                required: false
+            }
+        ]
     },
 ];
 
@@ -45,6 +52,9 @@ module.exports = async (client) => {
                     const cardsCommand = require('./commands/cards.js');
                     await cardsCommand.execute(interaction);
                                         
+                }else if (commandName=== 'burn') {
+                    const burnCommand = require('./commands/burn.js');
+                    await burnCommand.execute(interaction);
                 } else {
                     console.log(`Comando desconocido: ${commandName}`);
                 }

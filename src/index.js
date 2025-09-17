@@ -27,47 +27,6 @@ client.on('messageCreate', (msg) => {
     }
 });
 
-client.on('interactionCreate', async (interaction) => { 
-    if (!interaction.isChatInputCommand()) return;
-    
-    console.log(`Comando recibido: ${interaction.commandName}`);
-    
-    try {
-        if (interaction.commandName === 'add') {
-            const num1 = interaction.options.get('primer_numero').value;
-            const num2 = interaction.options.get('segundo_numero').value;
 
-            await interaction.reply(`La suma es: ${num1 + num2}`);
-        }
-        
-        if (interaction.commandName === 'embed') {
-            await interaction.deferReply({ ephemeral: true });
-            
-            const embed = new EmbedBuilder()
-                .setTitle("Embed title")
-                .setDescription('Esto es una descripcion del embed')
-                .setColor('Random')
-                .addFields({ 
-                    name: 'Field title', 
-                    value: 'Valor random',
-                    inline: true
-                },
-                { 
-                    name: '2nd Field title', 
-                    value: 'Otro Valor random',
-                    inline: false
-                });
-
-            await interaction.channel.send({ embeds: [embed] });
-            
-            await interaction.deleteReply();
-        }
-    } catch (error) {
-        console.error('Error en comando:', error);
-        if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply('Hubo un error al ejecutar el comando ❌');
-        }
-    }
-});
 
 client.login(process.env.TOKEN);

@@ -22,6 +22,30 @@ const commands = [
             }
         ]
     },
+    {
+        name: 'trade',
+        description: 'Intercambia cartas con otro usuario',
+        options: [
+            {
+                name: 'user',
+                type: 6, // USER (volvemos a USER)
+                description: 'Usuario con quien quieres intercambiar',
+                required: true
+            },
+            {
+                name: 'offer_card',
+                type: 3, // STRING
+                description: 'ID de la carta que ofreces',
+                required: true
+            },
+            {
+                name: 'request_card',
+                type: 3, // STRING
+                description: 'ID de la carta que quieres a cambio',
+                required: true
+            }
+        ]
+    }
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -54,6 +78,9 @@ module.exports = async (client) => {
                                         
                 }else if (commandName=== 'burn') {
                     const burnCommand = require('./commands/burn.js');
+                    await burnCommand.execute(interaction);
+                } else if (commandName=== 'trade') {
+                    const burnCommand = require('./commands/trade.js');
                     await burnCommand.execute(interaction);
                 } else {
                     console.log(`Comando desconocido: ${commandName}`);

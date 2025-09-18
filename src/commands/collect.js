@@ -2,24 +2,21 @@ const { EmbedBuilder } = require('discord.js');
 const pool = require('../database.js');
 const crypto = require('crypto');
 
-// Map para almacenar los cooldowns de usuarios
 const cooldowns = new Map();
-const COOLDOWN_TIME = 5 * 60 * 1000; // 5 minutos para testing
+const COOLDOWN_TIME = 5 * 60 * 1000; 
 
-// Cache de jugadores
 let playersCache = null;
 let lastCacheUpdate = 0;
 let isUpdatingCache = false;
 const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 horas
 
-// Función para generar ID único de carta
 const generateCardID = () => {
-    const timestamp = Date.now().toString(36); // Base36 timestamp (más corto)
-    const randomBytes = crypto.randomBytes(3).toString('hex'); // 6 caracteres hex
+    const timestamp = Date.now().toString(36); 
+    const randomBytes = crypto.randomBytes(3).toString('hex'); 
     return `${timestamp}${randomBytes}`.toUpperCase().substring(0, 12);
 };
 
-// Función para verificar si un ID ya existe (por seguridad)
+
 const ensureUniqueCardID = async () => {
     let cardId;
     let attempts = 0;
@@ -32,11 +29,10 @@ const ensureUniqueCardID = async () => {
         try {
             const existing = await pool.query('SELECT card_id FROM user_cards WHERE card_id = $1', [cardId]);
             if (existing.rows.length === 0) {
-                break; // ID único encontrado
+                break; 
             }
         } catch (error) {
             console.error('Error verificando unicidad del ID:', error);
-            // Si hay error en DB, usar el ID generado
             break;
         }
     } while (attempts < maxAttempts);
@@ -60,7 +56,6 @@ const getRarityColor = (rarity) => {
     }
 };
 
-// Función para obtener estrellas basadas en rareza
 const getRarityStars = (rarity) => {
     switch (rarity) {
         case 'Epic': return ':star::star::star:';
@@ -80,7 +75,6 @@ const formatTime = (ms) => {
     return `${seconds}s`;
 };
 
-// Función para obtener jugadores
 const getPlayers = async () => {
     const now = Date.now();
     
@@ -182,7 +176,6 @@ module.exports = {
             const userId = interaction.user.id;
             const now = Date.now();
             
-            // Verificar cooldown
             if (cooldowns.has(userId)) {
                 const expirationTime = cooldowns.get(userId) + COOLDOWN_TIME;
                 
@@ -200,10 +193,8 @@ module.exports = {
                 }
             }
 
-            // Establecer nuevo cooldown
             cooldowns.set(userId, now);
 
-            // Obtener jugadores
             let allPlayers;
             try {
                 allPlayers = await getPlayers();
@@ -220,7 +211,6 @@ module.exports = {
                 return await interaction.editReply({ embeds: [errorEmbed] });
             }
             
-            // Seleccionar rareza y jugador
             const selectedRarity = getRarity();
             console.log(`🎲 Selected rarity: ${selectedRarity}`);
             
@@ -246,11 +236,9 @@ module.exports = {
             const randomPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
             console.log(`🏆 Selected: ${randomPlayer.name} (${randomPlayer.rarity}) from ${randomPlayer.team}`);
 
-            // Generar ID único para la carta
             const cardId = await ensureUniqueCardID();
             console.log(`🆔 Generated card ID: ${cardId}`);
 
-            // Guardar en base de datos
             let dbSaved = false;
             const dbResult = await handleDatabaseOperation(async () => {
                 let playerResult = await pool.query('SELECT id FROM players WHERE name = $1', [randomPlayer.name]);
@@ -266,7 +254,6 @@ module.exports = {
                     playerId = newPlayer.rows[0].id;
                 }
 
-                // Insertar carta con ID único
                 await pool.query(
                     'INSERT INTO user_cards (card_id, user_id, player_id, goals, assists, league) VALUES ($1, $2, $3, $4, $5, $6)',
                     [cardId, userId, playerId, randomPlayer.goals, randomPlayer.assists, randomPlayer.league]
@@ -282,7 +269,6 @@ module.exports = {
                 console.log('⚠️ Card not saved to database, but continuing...');
             }
 
-            // Crear embed de respuesta con estrellas
             const stars = getRarityStars(randomPlayer.rarity);
             const embed = new EmbedBuilder()
                 .setColor(getRarityColor(randomPlayer.rarity))

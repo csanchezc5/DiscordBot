@@ -61,7 +61,6 @@ module.exports = async (client) => {
         
         console.log('Comandos registrados exitosamente');
 
-        // Manejar interacciones
         client.on('interactionCreate', async interaction => {
             if (!interaction.isChatInputCommand()) return;
 
@@ -89,7 +88,6 @@ module.exports = async (client) => {
             } catch (error) {
                 console.error(`Error ejecutando comando ${commandName}:`, error);
                 
-                // Manejo de errores para responder al usuario
                 const errorMessage = 'Hubo un error al ejecutar este comando. Por favor, inténtalo de nuevo.';
                 
                 try {

@@ -1,7 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const pool = require('../database.js');
 
-// Función para obtener estrellas basadas en rareza (versión compacta)
 const getRarityStars = (rarity) => {
     switch (rarity) {
         case 'Epic': return '⭐⭐⭐';
@@ -13,7 +12,6 @@ const getRarityStars = (rarity) => {
 
 const CARDS_PER_PAGE = 10;
 
-// Función para crear embed de colección
 const createCollectionEmbed = (cards, totalCards, currentPage, totalPages, user) => {
     const embed = new EmbedBuilder()
         .setColor(0x3498DB)
@@ -22,7 +20,6 @@ const createCollectionEmbed = (cards, totalCards, currentPage, totalPages, user)
         .setThumbnail(user.displayAvatarURL())
         .setTimestamp();
 
-    // Agregar las cartas como fields (2 por fila)
     cards.forEach((card, index) => {
         const stars = getRarityStars(card.rarity);
         const leagueDisplay = card.league || 'International League';
@@ -33,13 +30,11 @@ const createCollectionEmbed = (cards, totalCards, currentPage, totalPages, user)
             inline: true
         });
 
-        // Agregar field invisible cada 2 cartas para forzar nueva fila
         if ((index + 1) % 2 === 0) {
             embed.addFields({ name: '\u200b', value: '\u200b', inline: true });
         }
     });
 
-    // Footer con información de página
     embed.setFooter({ 
         text: `Page ${currentPage}/${totalPages} • ${cards.length} of ${totalCards} cards • Use card IDs for trading`,
         iconURL: user.displayAvatarURL()
@@ -48,7 +43,6 @@ const createCollectionEmbed = (cards, totalCards, currentPage, totalPages, user)
     return embed;
 };
 
-// Función para crear botones de navegación
 const createNavigationButtons = (currentPage, totalPages, userId) => {
     const firstButton = new ButtonBuilder()
         .setCustomId(`collection_first_${userId}`)
@@ -88,9 +82,8 @@ module.exports = {
     async execute(interaction) {
         try {
             const userId = interaction.user.id;
-            const page = 1; // Página inicial
+            const page = 1; 
 
-            // Obtener total de cartas del usuario
             const totalResult = await pool.query(`
                 SELECT COUNT(*) as total
                 FROM user_cards uc
@@ -112,7 +105,6 @@ module.exports = {
             const totalPages = Math.ceil(totalCards / CARDS_PER_PAGE);
             const offset = (page - 1) * CARDS_PER_PAGE;
 
-            // Obtener cartas para la página actual
             const userCards = await pool.query(`
                 SELECT uc.card_id, p.name, p.team, p.position, p.nationality, p.rarity, p.image_url,
                        uc.collected_at, uc.goals, uc.assists, uc.league
@@ -131,14 +123,12 @@ module.exports = {
                 components: totalPages > 1 ? [buttons] : []
             });
 
-            // Solo crear collector si hay más de una página
             if (totalPages > 1) {
                 const collector = response.createMessageComponentCollector({ 
                     time: 5 * 60 * 1000 // 5 minutos
                 });
 
                 collector.on('collect', async (buttonInteraction) => {
-                    // Verificar que solo el propietario de la colección pueda navegar
                     if (buttonInteraction.user.id !== userId) {
                         return await buttonInteraction.reply({ 
                             content: '❌ You can only navigate your own collection!', 
@@ -152,14 +142,12 @@ module.exports = {
                     if (customId.startsWith('collection_first_')) {
                         newPage = 1;
                     } else if (customId.startsWith('collection_prev_')) {
-                        // Obtener página actual del embed footer
                         const currentEmbed = buttonInteraction.message.embeds[0];
                         const footerText = currentEmbed.footer.text;
                         const pageMatch = footerText.match(/Page (\d+)\/\d+/);
                         const currentPage = pageMatch ? parseInt(pageMatch[1]) : 1;
                         newPage = Math.max(1, currentPage - 1);
                     } else if (customId.startsWith('collection_next_')) {
-                        // Obtener página actual del embed footer
                         const currentEmbed = buttonInteraction.message.embeds[0];
                         const footerText = currentEmbed.footer.text;
                         const pageMatch = footerText.match(/Page (\d+)\/\d+/);
@@ -180,7 +168,6 @@ module.exports = {
                         });
                     }
 
-                    // Obtener cartas para la nueva página
                     const newOffset = (newPage - 1) * CARDS_PER_PAGE;
                     const newCards = await pool.query(`
                         SELECT uc.card_id, p.name, p.team, p.position, p.nationality, p.rarity, p.image_url,
@@ -202,7 +189,6 @@ module.exports = {
                 });
 
                 collector.on('end', () => {
-                    // Deshabilitar botones cuando el collector expire
                     const disabledButtons = createNavigationButtons(1, totalPages, userId);
                     disabledButtons.components.forEach(button => button.setDisabled(true));
                     

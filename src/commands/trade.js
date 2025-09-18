@@ -1,15 +1,12 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const pool = require('../database.js');
 
-// Map para almacenar trades activos
 const activeTrades = new Map();
 
-// Función para resolver usuario por texto (mención, ID, username o nickname)
 const resolveUser = async (interaction, userInput) => {
     const guild = interaction.guild;
     if (!guild) return null;
 
-    // Si es una mención <@123456789>
     const mentionMatch = userInput.match(/^<@!?(\d+)>$/);
     if (mentionMatch) {
         try {
@@ -19,7 +16,6 @@ const resolveUser = async (interaction, userInput) => {
         }
     }
 
-    // Si es un ID directo
     if (/^\d+$/.test(userInput)) {
         try {
             return await guild.members.fetch(userInput);
@@ -28,17 +24,14 @@ const resolveUser = async (interaction, userInput) => {
         }
     }
 
-    // Buscar por username o nickname
     const lowerInput = userInput.toLowerCase();
     
-    // Primero intentar obtener todos los miembros del servidor
     try {
         await guild.members.fetch();
     } catch (error) {
         console.log('Could not fetch all members, searching in cache only');
     }
 
-    // Buscar coincidencias exactas primero
     let member = guild.members.cache.find(member => 
         member.user.username.toLowerCase() === lowerInput ||
         member.user.globalName?.toLowerCase() === lowerInput ||
@@ -47,7 +40,6 @@ const resolveUser = async (interaction, userInput) => {
 
     if (member) return member;
 
-    // Si no hay coincidencia exacta, buscar que contenga el texto
     member = guild.members.cache.find(member => 
         member.user.username.toLowerCase().includes(lowerInput) ||
         member.user.globalName?.toLowerCase().includes(lowerInput) ||
@@ -74,7 +66,6 @@ const getRarityColor = (rarity) => {
     }
 };
 
-// Función para obtener información de una carta
 const getCardInfo = async (userId, cardId) => {
     const result = await pool.query(`
         SELECT uc.id, uc.card_id, p.name, p.team, p.position, p.nationality, 
@@ -87,7 +78,6 @@ const getCardInfo = async (userId, cardId) => {
     return result.rows.length > 0 ? result.rows[0] : null;
 };
 
-// Función para crear embed de carta
 const createCardEmbed = (card, title) => {
     const stars = getRarityStars(card.rarity);
     const leagueDisplay = card.league || 'International League';
@@ -111,7 +101,6 @@ module.exports = {
             const offerCardId = interaction.options.getString('offer_card');
             const requestCardId = interaction.options.getString('request_card');
 
-            // Validaciones básicas
             if (targetUser.id === initiatorId) {
                 return await interaction.reply({ 
                     content: '❌ You cannot trade with yourself!', 
@@ -126,7 +115,6 @@ module.exports = {
                 });
             }
 
-            // Verificar que ambas cartas existen y pertenecen a los usuarios correctos
             const offerCard = await getCardInfo(initiatorId, offerCardId);
             if (!offerCard) {
                 return await interaction.reply({ 
@@ -143,7 +131,6 @@ module.exports = {
                 });
             }
 
-            // Verificar si ya hay un trade activo entre estos usuarios
             const tradeKey = [initiatorId, targetUser.id].sort().join('-');
             if (activeTrades.has(tradeKey)) {
                 return await interaction.reply({ 
@@ -152,10 +139,8 @@ module.exports = {
                 });
             }
 
-            // Crear ID único para este trade
             const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
-            // Guardar trade activo
             activeTrades.set(tradeKey, {
                 tradeId,
                 initiatorId,
@@ -165,7 +150,6 @@ module.exports = {
                 timestamp: Date.now()
             });
 
-            // Crear embed principal del trade
             const tradeEmbed = new EmbedBuilder()
                 .setColor(0x3498DB)
                 .setTitle('🔄 Trade Proposal')
@@ -185,7 +169,6 @@ module.exports = {
                 .setFooter({ text: `Trade expires in 5 minutes • ID: ${tradeId}` })
                 .setTimestamp();
 
-            // Crear botones
             const acceptButton = new ButtonBuilder()
                 .setCustomId(`trade_accept_${tradeId}`)
                 .setLabel('✅ Accept Trade')
@@ -204,14 +187,12 @@ module.exports = {
             const actionRow = new ActionRowBuilder()
                 .addComponents(acceptButton, rejectButton, detailsButton);
 
-            // Mencionar al usuario objetivo
             const response = await interaction.reply({ 
                 content: `${targetUser}, you have a trade proposal!`, 
                 embeds: [tradeEmbed], 
                 components: [actionRow] 
             });
 
-            // Configurar timeout para el trade (5 minutos)
             setTimeout(() => {
                 if (activeTrades.has(tradeKey)) {
                     activeTrades.delete(tradeKey);
@@ -230,7 +211,6 @@ module.exports = {
                 }
             }, 5 * 60 * 1000); // 5 minutos
 
-            // Configurar collector para botones
             const collector = response.createMessageComponentCollector({ 
                 time: 5 * 60 * 1000 
             });
@@ -247,7 +227,6 @@ module.exports = {
                 const { initiatorId, targetId, offerCard, requestCard } = tradeData;
 
                 if (buttonInteraction.customId.startsWith('trade_accept_')) {
-                    // Solo el usuario objetivo puede aceptar
                     if (buttonInteraction.user.id !== targetId) {
                         return await buttonInteraction.reply({ 
                             content: '❌ Only the trade recipient can accept this trade.', 
@@ -256,7 +235,6 @@ module.exports = {
                     }
 
                     try {
-                        // Verificar que ambas cartas aún existen
                         const currentOfferCard = await getCardInfo(initiatorId, offerCard.card_id);
                         const currentRequestCard = await getCardInfo(targetId, requestCard.card_id);
 
@@ -268,7 +246,6 @@ module.exports = {
                             });
                         }
 
-                        // Realizar el intercambio en la base de datos
                         await pool.query('BEGIN');
                         
                         await pool.query(
@@ -283,7 +260,6 @@ module.exports = {
                         
                         await pool.query('COMMIT');
 
-                        // Limpiar trade activo
                         activeTrades.delete(tradeKey);
 
                         const successEmbed = new EmbedBuilder()
@@ -321,7 +297,6 @@ module.exports = {
                     }
 
                 } else if (buttonInteraction.customId.startsWith('trade_reject_')) {
-                    // Solo el usuario objetivo puede rechazar
                     if (buttonInteraction.user.id !== targetId) {
                         return await buttonInteraction.reply({ 
                             content: '❌ Only the trade recipient can reject this trade.', 
@@ -344,7 +319,6 @@ module.exports = {
                     });
 
                 } else if (buttonInteraction.customId.startsWith('trade_details_')) {
-                    // Mostrar detalles de ambas cartas
                     const offerEmbed = createCardEmbed(offerCard, '📤 Offering');
                     const requestEmbed = createCardEmbed(requestCard, '📥 Requesting');
 

@@ -1,7 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const pool = require('../database.js');
 
-// Función para obtener estrellas basadas en rareza
 const getRarityStars = (rarity) => {
     switch (rarity) {
         case 'Epic': return ':star::star::star:';
@@ -30,7 +29,6 @@ module.exports = {
             let queryParams;
 
             if (cardId) {
-                // Buscar carta por ID específico
                 cardQuery = `
                     SELECT uc.id, uc.card_id, p.name, p.team, p.position, p.nationality, 
                            p.rarity, p.image_url, uc.collected_at, uc.goals, uc.assists, uc.league
@@ -40,7 +38,6 @@ module.exports = {
                 `;
                 queryParams = [userId, cardId.toUpperCase()];
             } else {
-                // Buscar la última carta del usuario
                 cardQuery = `
                     SELECT uc.id, uc.card_id, p.name, p.team, p.position, p.nationality, 
                            p.rarity, p.image_url, uc.collected_at, uc.goals, uc.assists, uc.league
@@ -71,7 +68,6 @@ module.exports = {
             const stars = getRarityStars(card.rarity);
             const leagueDisplay = card.league || 'International League';
 
-            // Crear embed de confirmación
             const confirmEmbed = new EmbedBuilder()
                 .setColor(getRarityColor(card.rarity))
                 .setTitle(`🔥 Confirm Card Burn`)
@@ -85,7 +81,6 @@ module.exports = {
                 .setFooter({ text: `Collected on ${new Date(card.collected_at).toLocaleDateString()}` })
                 .setTimestamp();
 
-            // Si tiene estadísticas, agregarlas
             if (card.goals > 0 || card.assists > 0) {
                 confirmEmbed.addFields(
                     { name: '⚽ Goals', value: card.goals.toString(), inline: true },
@@ -93,7 +88,6 @@ module.exports = {
                 );
             }
 
-            // Crear botones de confirmación
             const confirmButton = new ButtonBuilder()
                 .setCustomId(`burn_confirm_${card.id}`)
                 .setLabel('🔥 Burn Card')
@@ -113,7 +107,6 @@ module.exports = {
                 ephemeral: true 
             });
 
-            // Crear collector para los botones
             const collectorFilter = (i) => {
                 return (i.customId === `burn_confirm_${card.id}` || i.customId === 'burn_cancel') && 
                        i.user.id === interaction.user.id;
@@ -126,7 +119,6 @@ module.exports = {
                 });
 
                 if (confirmation.customId === `burn_confirm_${card.id}`) {
-                    // Eliminar la carta de la base de datos
                     await pool.query('DELETE FROM user_cards WHERE id = $1', [card.id]);
 
                     const burnedEmbed = new EmbedBuilder()
